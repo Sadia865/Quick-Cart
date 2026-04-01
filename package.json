@@ -15,7 +15,7 @@
     "inngest": "^4.1.0",
     "lucide-react": "^1.7.0",
     "mongoose": "^9.3.3",
-    "next": "15.1.6",
+    "next": "^16.2.2",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "react-hot-toast": "^2.5.1",
