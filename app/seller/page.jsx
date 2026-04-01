@@ -5,7 +5,7 @@
 'use client'
 import { assets } from "@/assets/assets";
 import Image from "next/image";
-import { Footer } from "@/components/Footer";
+import Footer from '@/components/seller/Footer'
 import { useAppContext } from "@/context/AppContext";
 import axios from "axios";
 import toast from "react-hot-toast";
