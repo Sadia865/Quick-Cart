@@ -9,7 +9,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 export async function POST(req) {
     try {
         const { userId } = getAuth(req);
-        if (!userId) return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+        if (!userId) {
+            return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+        }
 
         const { address, items } = await req.json();
         if (!address || !items || items.length === 0) {
@@ -23,43 +25,51 @@ export async function POST(req) {
         for (const item of items) {
             const product = await Product.findById(item.productId);
             if (!product) continue;
+
+            // Only include image if it's a valid https URL from a trusted source
+            const imageUrl = product.image?.[0];
+            const isValidImage = imageUrl &&
+                imageUrl.startsWith('https://') &&
+                (imageUrl.includes('cloudinary.com') || imageUrl.includes('githubusercontent.com'));
+
             lineItems.push({
                 price_data: {
                     currency: "usd",
                     product_data: {
                         name: product.name,
-                        images: [product.image[0]],
-                        description: product.description?.substring(0, 200),
+                        description: product.description?.substring(0, 200) || product.name,
+                        // Only add images if from trusted source
+                        ...(isValidImage && { images: [imageUrl] }),
                     },
-                    unit_amount: Math.round(product.offerPrice * 100), // cents
+                    unit_amount: Math.round(product.offerPrice * 100),
                 },
                 quantity: item.quantity,
             });
         }
 
         if (lineItems.length === 0) {
-            return NextResponse.json({ success: false, message: "No valid products" }, { status: 400 });
+            return NextResponse.json({ success: false, message: "No valid products found" }, { status: 400 });
         }
+
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://quick-cart-ubyb.vercel.app';
 
         // Create Stripe checkout session
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ["card"],
             line_items: lineItems,
             mode: "payment",
-            success_url: `${process.env.NEXT_PUBLIC_APP_URL}/order-placed?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/cart`,
+            success_url: `${appUrl}/order-placed?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${appUrl}/cart`,
             metadata: {
                 userId,
-                addressId: address._id || "",
-                addressJson: JSON.stringify(address),
-            },
-            shipping_address_collection: {
-                allowed_countries: ["US", "GB", "CA", "AU", "AE", "SA", "QA", "KW"],
+                addressJson: JSON.stringify(address).substring(0, 500),
             },
         });
 
         return NextResponse.json({ success: true, url: session.url });
+
     } catch (error) {
+        console.error("Stripe error:", error.message);
         return NextResponse.json({ success: false, message: error.message }, { status: 500 });
     }
 }
